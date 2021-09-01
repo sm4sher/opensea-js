@@ -83,14 +83,14 @@ export class OpenSeaAPI {
    * @param order Order JSON to post to the orderbook
    * @param retries Number of times to retry if the service is unavailable for any reason
    */
-  public async postOrder(order: OrderJSON, retries = 2): Promise<Order> {
+  public async postOrder(order: OrderJSON, retries = 2, opts: RequestInit = {}): Promise<Order> {
     let json
     try {
-      json = await this.post(`${ORDERBOOK_PATH}/orders/post/`, order) as OrderJSON
-    } catch (error) {
+      json = await this.post(`${ORDERBOOK_PATH}/orders/post/`, order, opts) as OrderJSON
+    } catch (error: any) {
       _throwOrContinue(error, retries)
       await delay(3000)
-      return this.postOrder(order, retries - 1)
+      return this.postOrder(order, retries - 1, opts)
     }
     return orderFromJSON(json)
   }
@@ -194,16 +194,16 @@ export class OpenSeaAPI {
       tokenAddress: string,
       tokenId: string | number | null,
     },
-                        retries = 1
+                        retries = 1,  opts: RequestInit = {}
     ): Promise<OpenSeaAsset> {
 
     let json
     try {
-      json = await this.get(`${API_PATH}/asset/${tokenAddress}/${tokenId || 0}/`)
-    } catch (error) {
+      json = await this.get(`${API_PATH}/asset/${tokenAddress}/${tokenId || 0}/`, {}, opts)
+    } catch (error: any) {
       _throwOrContinue(error, retries)
       await delay(1000)
-      return this.getAsset({ tokenAddress, tokenId }, retries - 1)
+      return this.getAsset({ tokenAddress, tokenId }, retries - 1, opts)
     }
 
     return assetFromJSON(json)
@@ -252,7 +252,7 @@ export class OpenSeaAPI {
         limit: this.pageSize,
         offset: (page - 1) * this.pageSize
       })
-    } catch (error) {
+    } catch (error: any) {
       _throwOrContinue(error, retries)
       await delay(1000)
       return this.getPaymentTokens(query, page, retries - 1)
@@ -304,12 +304,12 @@ export class OpenSeaAPI {
    * @param apiPath Path to URL endpoint under API
    * @param query Data to send. Will be stringified using QueryString
    */
-  public async get(apiPath: string, query: object = {}): Promise<any> {
+  public async get(apiPath: string, query: object = {}, opts: RequestInit = {}): Promise<any> {
 
     const qs = QueryString.stringify(query)
     const url = `${apiPath}?${qs}`
 
-    const response = await this._fetch(url)
+    const response = await this._fetch(url, opts)
     return response.json()
   }
 
@@ -376,7 +376,7 @@ export class OpenSeaAPI {
 
   private async _handleApiResponse(response: Response) {
     if (response.ok) {
-      this.logger(`Got success: ${response.status}`)
+      this.logger(`Got success: ${response.url}`)
       return response
     }
 
