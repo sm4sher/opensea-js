@@ -497,14 +497,15 @@ export class OpenSeaPort {
    */
   public async createBuyOrder(
       { asset, accountAddress, startAmount, quantity = 1, expirationTime = 0, paymentTokenAddress, sellOrder, referrerAddress }:
-      { asset: Asset;
+      { asset: OpenSeaAsset;
         accountAddress: string;
         startAmount: number;
         quantity?: number;
         expirationTime?: number;
         paymentTokenAddress?: string;
         sellOrder?: Order;
-        referrerAddress?: string; }
+        referrerAddress?: string; },
+      opts: RequestInit = {}
     ): Promise<Order> {
 
     paymentTokenAddress = paymentTokenAddress || WyvernSchemas.tokens[this._networkName].canonicalWrappedEther.address
@@ -519,12 +520,13 @@ export class OpenSeaPort {
       extraBountyBasisPoints: 0,
       sellOrder,
       referrerAddress
-    })
+    },
+    opts)
 
     // NOTE not in Wyvern exchange code:
     // frontend checks to make sure
     // token is approved and sufficiently available
-    await this._buyOrderValidationAndApprovals({ order, accountAddress })
+    // await this._buyOrderValidationAndApprovals({ order, accountAddress })
 
     const hashedOrder = {
       ...order,
@@ -542,7 +544,7 @@ export class OpenSeaPort {
       ...hashedOrder,
       ...signature
     }
-    return this.validateAndPostOrder(orderWithSignature)
+    return this.validateAndPostOrder(orderWithSignature, opts)
   }
 
   /**
@@ -1619,7 +1621,7 @@ export class OpenSeaPort {
    * @param order The order to post. Can either be signed by the maker or pre-approved on the Wyvern contract using approveOrder. See https://github.com/ProjectWyvern/wyvern-ethereum/blob/master/contracts/exchange/Exchange.sol#L178
    * @returns The order as stored by the orderbook
    */
-  public async validateAndPostOrder(order: Order): Promise<Order> {
+  public async validateAndPostOrder(order: Order, opts: RequestInit = {}): Promise<Order> {
     const hash = await this._wyvernProtocolReadOnly.wyvernExchange.hashOrder_.callAsync(
       [order.exchange, order.maker, order.taker, order.feeRecipient, order.target, order.staticTarget, order.paymentToken],
       [order.makerRelayerFee, order.takerRelayerFee, order.makerProtocolFee, order.takerProtocolFee, order.basePrice, order.extra, order.listingTime, order.expirationTime, order.salt],
@@ -1638,7 +1640,8 @@ export class OpenSeaPort {
     this.logger('Order hashes match')
 
     // Validation is called server-side
-    const confirmedOrder = await this.api.postOrder(orderToJSON(order))
+    // We already handle retries at a higher level -> set 0 retries here
+    const confirmedOrder = await this.api.postOrder(orderToJSON(order), 0, opts)
     return confirmedOrder
   }
 
@@ -1843,7 +1846,7 @@ export class OpenSeaPort {
 
   public async _makeBuyOrder(
       { asset, quantity, accountAddress, startAmount, expirationTime = 0, paymentTokenAddress, extraBountyBasisPoints = 0, sellOrder, referrerAddress }:
-      { asset: Asset;
+      { asset: OpenSeaAsset;
         quantity: number;
         accountAddress: string;
         startAmount: number;
@@ -1851,7 +1854,8 @@ export class OpenSeaPort {
         paymentTokenAddress: string;
         extraBountyBasisPoints: number;
         sellOrder?: UnhashedOrder;
-        referrerAddress?: string; }
+        referrerAddress?: string; },
+      opts: RequestInit = {}
     ): Promise<UnhashedOrder> {
 
     accountAddress = validateAndFormatWalletAddress(this.web3, accountAddress)
@@ -1859,7 +1863,7 @@ export class OpenSeaPort {
     const quantityBN = WyvernProtocol.toBaseUnitAmount(makeBigNumber(quantity), asset.decimals || 0)
     const wyAsset = getWyvernAsset(schema, asset, quantityBN)
 
-    const openSeaAsset: OpenSeaAsset = await this.api.getAsset(asset)
+    const openSeaAsset: OpenSeaAsset = asset
 
     const taker = sellOrder
       ? sellOrder.maker
@@ -2381,7 +2385,7 @@ export class OpenSeaPort {
 
       return true
 
-    } catch (error) {
+    } catch (error: any) {
 
       if (retries <= 0) {
         throw new Error(`Error matching this listing: ${error.message}. Please contact the maker or try again later!`)
@@ -2827,22 +2831,23 @@ export class OpenSeaPort {
       ? startAmount - endAmount
       : 0
     const paymentToken = tokenAddress.toLowerCase()
-    const isEther = tokenAddress == NULL_ADDRESS
-    const { tokens } = await this.api.getPaymentTokens({ address: paymentToken })
-    const token = tokens[0]
+    // Avoid making a request just to get the number of decimals of WETH... pretend it's ETH
+    const isEther = true // tokenAddress == NULL_ADDRESS
+    // const { tokens } = await this.api.getPaymentTokens({ address: paymentToken })
+    // const token = tokens[0]
 
     // Validation
     if (isNaN(startAmount) || startAmount == null || startAmount < 0) {
       throw new Error(`Starting price must be a number >= 0`)
     }
-    if (!isEther && !token) {
+    if (!isEther) {
       throw new Error(`No ERC-20 token found for '${paymentToken}'`)
     }
     if (isEther && waitingForBestCounterOrder) {
       throw new Error(`English auctions must use wrapped ETH or an ERC-20 token.`)
     }
     if (isEther && orderSide === OrderSide.Buy) {
-      throw new Error(`Offers must use wrapped ETH or an ERC-20 token.`)
+      // throw new Error(`Offers must use wrapped ETH or an ERC-20 token.`)
     }
     if (priceDiff < 0) {
       throw new Error('End price must be less than or equal to the start price.')
@@ -2859,18 +2864,12 @@ export class OpenSeaPort {
 
     // Note: WyvernProtocol.toBaseUnitAmount(makeBigNumber(startAmount), token.decimals)
     // will fail if too many decimal places, so special-case ether
-    const basePrice = isEther
-      ? makeBigNumber(this.web3.toWei(startAmount, 'ether')).round()
-      : WyvernProtocol.toBaseUnitAmount(makeBigNumber(startAmount), token.decimals)
+    const basePrice = makeBigNumber(this.web3.toWei(startAmount, 'ether')).round()
 
-    const extra = isEther
-      ? makeBigNumber(this.web3.toWei(priceDiff, 'ether')).round()
-      : WyvernProtocol.toBaseUnitAmount(makeBigNumber(priceDiff), token.decimals)
+    const extra = makeBigNumber(this.web3.toWei(priceDiff, 'ether')).round()
 
     const reservePrice = englishAuctionReservePrice
-      ? isEther
-        ? makeBigNumber(this.web3.toWei(englishAuctionReservePrice, 'ether')).round()
-        : WyvernProtocol.toBaseUnitAmount(makeBigNumber(englishAuctionReservePrice), token.decimals)
+      ? makeBigNumber(this.web3.toWei(englishAuctionReservePrice, 'ether')).round()
       : undefined
 
     return { basePrice, extra, paymentToken, reservePrice }
@@ -2947,7 +2946,7 @@ export class OpenSeaPort {
 
       txnData.gas = this._correctGasAmount(gasEstimate)
 
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Failed atomic match with args: `, args, error)
       throw new Error(`Oops, the Ethereum network rejected this transaction :( The OpenSea devs have been alerted, but this problem is typically due an item being locked or untransferrable. The exact error was "${error.message.substr(0, MAX_ERROR_LENGTH)}..."`)
     }
@@ -2956,7 +2955,7 @@ export class OpenSeaPort {
     try {
       this.logger(`Fulfilling order with gas set to ${txnData.gas}`)
       txHash = await this._wyvernProtocol.wyvernExchange.atomicMatch_.sendTransactionAsync(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], txnData)
-    } catch (error) {
+    } catch (error: any) {
       console.error(error)
 
       this._dispatch(EventType.TransactionDenied, { error, buy, sell, accountAddress, matchMetadata: metadata })
@@ -3069,7 +3068,7 @@ export class OpenSeaPort {
       await confirmTransaction(this.web3, transactionHash)
       this.logger(`Transaction succeeded: ${description}`)
       this._dispatch(EventType.TransactionConfirmed, transactionEventData)
-    } catch (error) {
+    } catch (error: any) {
       this.logger(`Transaction failed: ${description}`)
       this._dispatch(EventType.TransactionFailed, {
         ...transactionEventData, error
