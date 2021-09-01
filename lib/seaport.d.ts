@@ -178,7 +178,7 @@ export declare class OpenSeaPort {
      * @param referrerAddress The optional address that referred the order
      */
     createBuyOrder({ asset, accountAddress, startAmount, quantity, expirationTime, paymentTokenAddress, sellOrder, referrerAddress }: {
-        asset: Asset;
+        asset: OpenSeaAsset;
         accountAddress: string;
         startAmount: number;
         quantity?: number;
@@ -186,7 +186,7 @@ export declare class OpenSeaPort {
         paymentTokenAddress?: string;
         sellOrder?: Order;
         referrerAddress?: string;
-    }): Promise<Order>;
+    }, opts?: RequestInit): Promise<Order>;
     /**
      * Create a sell order to auction an asset.
      * Will throw a 'You do not own enough of this asset' error if the maker doesn't have the asset or not enough of it to sell the specific `quantity`.
@@ -525,7 +525,7 @@ export declare class OpenSeaPort {
      * @param order The order to post. Can either be signed by the maker or pre-approved on the Wyvern contract using approveOrder. See https://github.com/ProjectWyvern/wyvern-ethereum/blob/master/contracts/exchange/Exchange.sol#L178
      * @returns The order as stored by the orderbook
      */
-    validateAndPostOrder(order: Order): Promise<Order>;
+    validateAndPostOrder(order: Order, opts?: RequestInit): Promise<Order>;
     /**
      * DEPRECATED: ERC-1559
      * https://eips.ethereum.org/EIPS/eip-1559
@@ -599,7 +599,7 @@ export declare class OpenSeaPort {
         proxyAddress?: string;
     }): Promise<BigNumber>;
     _makeBuyOrder({ asset, quantity, accountAddress, startAmount, expirationTime, paymentTokenAddress, extraBountyBasisPoints, sellOrder, referrerAddress }: {
-        asset: Asset;
+        asset: OpenSeaAsset;
         quantity: number;
         accountAddress: string;
         startAmount: number;
@@ -608,7 +608,7 @@ export declare class OpenSeaPort {
         extraBountyBasisPoints: number;
         sellOrder?: UnhashedOrder;
         referrerAddress?: string;
-    }): Promise<UnhashedOrder>;
+    }, opts?: RequestInit): Promise<UnhashedOrder>;
     _makeSellOrder({ asset, quantity, accountAddress, startAmount, endAmount, listingTime, expirationTime, waitForHighestBid, englishAuctionReservePrice, paymentTokenAddress, extraBountyBasisPoints, buyerAddress }: {
         asset: Asset;
         quantity: number;

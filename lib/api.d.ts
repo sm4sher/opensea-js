@@ -31,7 +31,7 @@ export declare class OpenSeaAPI {
      * @param order Order JSON to post to the orderbook
      * @param retries Number of times to retry if the service is unavailable for any reason
      */
-    postOrder(order: OrderJSON, retries?: number): Promise<Order>;
+    postOrder(order: OrderJSON, retries?: number, opts?: RequestInit): Promise<Order>;
     /**
      * Create a whitelist entry for an asset to prevent others from buying.
      * Buyers will have to have verified at least one of the emails
@@ -69,7 +69,7 @@ export declare class OpenSeaAPI {
     getAsset({ tokenAddress, tokenId }: {
         tokenAddress: string;
         tokenId: string | number | null;
-    }, retries?: number): Promise<OpenSeaAsset>;
+    }, retries?: number, opts?: RequestInit): Promise<OpenSeaAsset>;
     /**
      * Fetch list of assets from the API, returning the page of assets and the count of total assets
      * @param query Query to use for getting orders. A subset of parameters on the `OpenSeaAssetJSON` type is supported
@@ -112,7 +112,7 @@ export declare class OpenSeaAPI {
      * @param apiPath Path to URL endpoint under API
      * @param query Data to send. Will be stringified using QueryString
      */
-    get(apiPath: string, query?: object): Promise<any>;
+    get(apiPath: string, query?: object, opts?: RequestInit): Promise<any>;
     /**
      * POST JSON data to API, sending auth token in headers
      * @param apiPath Path to URL endpoint under API
