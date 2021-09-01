@@ -1637,7 +1637,7 @@ export class OpenSeaPort {
       console.error(order)
       throw new Error(`Order couldn't be validated by the exchange due to a hash mismatch. Make sure your wallet is on the right network!`)
     }
-    this.logger('Order hashes match')
+    //this.logger('Order hashes match')
 
     // Validation is called server-side
     // We already handle retries at a higher level -> set 0 retries here
